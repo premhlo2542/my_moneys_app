@@ -150,6 +150,12 @@ label.l{display:block;font-size:12.5px;font-weight:600;color:var(--mut);margin:1
 .tip:after{content:"";position:absolute;right:-30px;bottom:-40px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
 .tip small{opacity:.8;font-weight:600;display:flex;gap:6px;align-items:center;font-size:12.5px}.tip p{margin:8px 0 0;font-size:14.5px;line-height:1.65;position:relative}
 .note{font-size:11.5px;color:var(--mut);text-align:center;line-height:1.7;margin:18px 10px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dw{text-align:center;font-size:12px;font-weight:500;color:var(--mut);padding:2px 0 6px}
+.cd{aspect-ratio:1/1.3;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:4px 0;gap:1px;background:rgba(229,72,77,var(--h,0));font-size:9.5px;line-height:1.25;min-width:0;overflow:hidden;border:1.5px solid transparent}
+.cd b{font-size:13px;font-weight:600;min-width:22px;height:22px;display:grid;place-items:center;border-radius:99px}
+.cd.td b{background:var(--pri);color:#fff}.cd.on{border-color:var(--tx)}
+.ci{color:var(--inc);font-weight:600}.ce{color:var(--exp);font-weight:600}
 .cinfo{font-size:13px;color:var(--mut);min-height:20px;margin-bottom:8px;display:flex;justify-content:space-between;gap:8px}.cinfo b{color:var(--tx);font-weight:600}
 </style>
 </head>
@@ -304,7 +310,7 @@ function dateLabel(s){const d=parseISO(s),t=new Date(),y=new Date();y.setDate(t.
 function dateShort(s){const t=new Date(),y=new Date();y.setDate(t.getDate()-1);if(s===iso(t))return'วันนี้';if(s===iso(y))return'เมื่อวาน';const d=parseISO(s);return`${d.getDate()} ${MON[d.getMonth()]} ${String(be(d.getFullYear())).slice(2)}`}
 
 /* ============ UI state / render ============ */
-const ui={tab:'home',period:'month',off:0,filter:'all',q:'',lOff:0,more:200,sel:null};
+const ui={tab:'home',period:'month',off:0,filter:'all',q:'',lOff:0,more:200,sel:null,lview:'list',calSel:null};
 const TITLES={home:['เงินของฉัน',()=>{const d=new Date();return`${DOWF[d.getDay()]}ที่ ${d.getDate()} ${MONF[d.getMonth()]} ${be(d.getFullYear())}`}],list:['รายการ','ประวัติรายรับ-รายจ่าย'],report:['สรุปผล','ภาพรวมการเงินของคุณ'],advisor:['ที่ปรึกษา','วิเคราะห์จากข้อมูลจริงของคุณ'],settings:['ตั้งค่า','จัดการข้อมูลและการใช้งาน']};
 const NAVS=[['home','home','หน้าหลัก'],['list','list','รายการ'],null,['report','chart','สรุป'],['advisor','bulb','ที่ปรึกษา']];
 $('#gear').innerHTML=ico('sliders',20);
@@ -365,7 +371,29 @@ function listHtml(){const L=filteredTx();if(!L.length)return`<div class="card" s
   const flush=()=>{if(!buf.length)return;const net=buf.reduce((s,t)=>s+(t.t==='inc'?t.a:-t.a),0);out+=`<div class="dh"><span>${dateLabel(cur)}</span><span>${net<0?'−':'+'}${fmt(Math.abs(net))}</span></div><div class="grp" style="margin-bottom:0">${buf.map(t=>txRow(t)).join('')}</div>`;buf=[]};
   for(const t of shown){if(t.d!==cur){flush();cur=t.d}buf.push(t)}flush();
   if(L.length>shown.length)out+=`<button class="btn sec" style="margin-top:14px" data-act="more">แสดงเพิ่มเติม</button>`;return out}
-function vList(){return`<div class="sw">${ico('search',18)}<input class="search" id="q" type="search" placeholder="ค้นหาชื่อ หมวดหมู่ หรือจำนวนเงิน" value="${esc(ui.q)}"></div>
+const kfmt=n=>n>=1e6?(n/1e6).toFixed(1).replace(/\.0$/,'')+'M':n>=1e4?Math.round(n/1e3)+'k':n>=1e3?(n/1e3).toFixed(1).replace(/\.0$/,'')+'k':String(Math.round(n));
+function calHtml(){
+  const r=range('month',ui.lOff),a=agg(r),td=today();
+  const per={};for(const t of a.list){const o=per[t.d]||(per[t.d]={i:0,e:0});o[t.t==='inc'?'i':'e']+=t.a}
+  const maxE=Math.max(1,...Object.values(per).map(o=>o.e));
+  let sel=ui.calSel&&inR({d:ui.calSel},r)?ui.calSel:(ui.lOff===0?td:null);
+  const first=(r.sd.getDay()+6)%7,dim=r.ed.getDate();
+  let cells=['จ','อ','พ','พฤ','ศ','ส','อา'].map(x=>`<div class="dw">${x}</div>`).join('');
+  for(let i=0;i<first;i++)cells+='<i></i>';
+  for(let d=1;d<=dim;d++){const k=iso(new Date(r.sd.getFullYear(),r.sd.getMonth(),d)),o=per[k];
+    cells+=`<button class="cd ${k===td?'td':''} ${k===sel?'on':''}" data-act="day" data-d="${k}" style="${o&&o.e?`--h:${(.07+o.e/maxE*.3).toFixed(2)}`:''}"><b>${d}</b>${o&&o.i?`<span class="ci">+${kfmt(o.i)}</span>`:''}${o&&o.e?`<span class="ce">${kfmt(o.e)}</span>`:''}</button>`}
+  let h=`<div class="row2" style="margin-bottom:14px"><div class="stat"><small>${ico('down',14)} รายรับเดือนนี้</small><b style="color:var(--inc)">${money(a.inc)}</b></div><div class="stat"><small>${ico('up',14)} รายจ่ายเดือนนี้</small><b>${money(a.exp)}</b></div></div>
+  <div class="card" style="padding:14px 10px"><div class="cal">${cells}</div>
+  <div style="display:flex;gap:16px;justify-content:center;font-size:11.5px;color:var(--mut);margin-top:12px"><span><b style="color:var(--inc)">+</b> รายรับ</span><span><b style="color:var(--exp)">●</b> รายจ่าย (พื้นหลังเข้ม = ใช้มาก)</span></div></div>`;
+  if(sel){const L=sorted(a.list.filter(t=>t.d===sel)),net=L.reduce((s,t)=>s+(t.t==='inc'?t.a:-t.a),0);
+    h+=`<div class="card"><h3>${dateLabel(sel)} <span class="lb" style="font-size:13px;color:${net<0?'var(--exp)':'var(--inc)'}">${L.length?(net<0?'−':'+')+fmt(Math.abs(net)):''}</span></h3>${L.length?L.map(t=>txRow(t)).join(''):empty('cal','ไม่มีรายการในวันนี้','')}<button class="btn sec" style="margin-top:12px" data-act="addday" data-d="${sel}">${ico('plus',18,2.2)} เพิ่มรายการวันนี้</button></div>`}
+  else h+=`<div class="note">แตะที่วันในปฏิทินเพื่อดูรายการของวันนั้น</div>`;
+  return h}
+function vList(){
+  const seg=`<div class="seg" style="margin-bottom:12px">${[['list','รายการ'],['cal','ปฏิทิน']].map(([v,n])=>`<button class="${ui.lview===v?'on':''}" data-act="lview" data-v="${v}">${n}</button>`).join('')}</div>`;
+  if(ui.lview==='cal')return seg+nav2('month',ui.lOff,'lnav')+calHtml();
+  return seg+vListMain()}
+function vListMain(){return`<div class="sw">${ico('search',18)}<input class="search" id="q" type="search" placeholder="ค้นหาชื่อ หมวดหมู่ หรือจำนวนเงิน" value="${esc(ui.q)}"></div>
   <div class="chips">${[['all','ทั้งหมด'],['exp','รายจ่าย'],['inc','รายรับ']].map(([v,n])=>`<button class="chip ${ui.filter===v?'on':''}" data-act="filter" data-v="${v}">${n}</button>`).join('')}</div>
   ${ui.q?'':nav2('month',ui.lOff,'lnav')}<div id="lst">${listHtml()}</div>`}
 
@@ -508,8 +536,8 @@ function key(k){let s=form.amt||'';
   else if(k==='.'){if(!s.includes('.'))s=(s||'0')+'.'}
   else{const[i,f]=s.split('.');if(s.includes('.')){if((f||'').length>=2)return}else if(i.length>=9)return;s=(s==='0'?'':s)+k}
   form.amt=s;$('#amt').innerHTML=amtHtml()}
-function openTx(id){const t=id&&db.tx.find(x=>x.id===id);
-  form=t?{id:t.id,t:t.t,c:t.c,ac:t.ac,d:t.d,amt:String(t.a),open:true}:{t:'exp',c:null,ac:db.set.lastAc||'cash',d:today(),amt:'',open:true};
+function openTx(id,date){const t=id&&db.tx.find(x=>x.id===id);
+  form=t?{id:t.id,t:t.t,c:t.c,ac:t.ac,d:t.d,amt:String(t.a),open:true}:{t:'exp',c:null,ac:db.set.lastAc||'cash',d:date||today(),amt:'',open:true};
   const keys=['1','2','3','4','5','6','7','8','9','.','0','b'];
   openSheet(sh(t?'แก้ไขรายการ':'เพิ่มรายการ','',t?`<button data-act="deltx" aria-label="ลบ" style="color:var(--exp);background:rgba(229,72,77,.1)">${ico('trash',17,2)}</button>`:'').replace('</div></div>','</div></div>')+`
   <div class="seg ty" id="tseg">${[['exp','รายจ่าย'],['inc','รายรับ']].map(([v,n])=>`<button data-act="ttype" data-v="${v}" class="${form.t===v?'on':''}">${n}</button>`).join('')}</div>
@@ -585,7 +613,10 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
     case'deltx':{const tid=form.id;if(await confirmBox('ต้องการลบรายการนี้ใช่หรือไม่?','ลบรายการ')){db.tx=db.tx.filter(t=>t.id!==tid);save();render();toast('ลบแล้ว','trash')}break}
     case'filter':ui.filter=v;ui.more=200;render();break;
     case'more':ui.more+=200;$('#lst').innerHTML=listHtml();break;
-    case'lnav':ui.lOff=Math.min(0,ui.lOff+(+el.dataset.d));ui.more=200;render();break;
+    case'lnav':ui.lOff=Math.min(0,ui.lOff+(+el.dataset.d));ui.more=200;ui.calSel=null;render();break;
+    case'lview':ui.lview=v;render(true);break;
+    case'day':{ui.calSel=el.dataset.d;const y=scrollY;render();scrollTo(0,y);break}
+    case'addday':openTx(null,el.dataset.d);break;
     case'rnav':ui.off=Math.min(0,ui.off+(+el.dataset.d));ui.sel=null;render();break;
     case'period':ui.period=v;ui.off=0;ui.sel=null;render();break;
     case'bar':{const i=+el.dataset.i;ui.sel=ui.sel===i?null:i;const y=scrollY;render();scrollTo(0,y);break}
